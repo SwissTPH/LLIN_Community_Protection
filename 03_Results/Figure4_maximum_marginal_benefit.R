@@ -462,9 +462,9 @@ figure4B <- ggplot(
       z = marginal_gain
     ),
     breaks = c(
-      5,
       10,
-      15
+      15,
+      25
     ),
     colour = "white",
     linewidth = 0.25
@@ -475,9 +475,9 @@ figure4B <- ggplot(
       z = marginal_gain
     ),
     breaks = c(
-      5,
       10,
-      15
+      15,
+      25
     ),
     size = 2.6,
     stroke = 0.2,
@@ -509,7 +509,7 @@ figure4B <- ggplot(
     y = NULL
   )
 
-
+figure4B
 # ============================================================
 # COMBINE FIGURE 4
 # ============================================================

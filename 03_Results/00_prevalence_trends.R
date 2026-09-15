@@ -1,11 +1,11 @@
 #################################
-# Figure 2: Prevalence reduction
+# Figure 2: Prevalence trends
 #
 # Created: September 2026
 #
 # Purpose:
-#   Generate the prevalence reduction figure showing malaria
-#   parasite prevalence reduction among ITN users and non-users.
+#   Generate the prevalence trend figure showing malaria
+#   parasite prevalence among LLIN users and non-users.
 #
 # Data:
 #   OpenMalaria simulation outputs stored in:
@@ -147,8 +147,8 @@ prevalence_data <- openmalaria_data %>%
   ) %>%
   mutate(
     population = case_when(
-      age_group == "LLINusers_0-100" ~ "ITN users",
-      age_group == "0-100"          ~ "ITN non-users",
+      age_group == "LLINusers_0-100" ~ "LLIN users",
+      age_group == "0-100"          ~ "LLIN non-users",
       TRUE                          ~ NA_character_
     ),
     EIR_cat = case_when(
@@ -186,13 +186,13 @@ prevalence_data <- openmalaria_data %>%
 
 
 # ------------------------------------------------------------
-# 2. Calculate baseline prevalence for I non-users
+# 2. Calculate baseline prevalence for LLIN non-users
 # ------------------------------------------------------------
 
 baseline_prevalence <- prevalence_data %>%
   filter(
     futNetcovstart2023 == 0,
-    population == "ITN non-users"
+    population == "LLIN non-users"
   ) %>%
   group_by(
     year,
@@ -246,8 +246,8 @@ overall_prevalence_by_seed <- openmalaria_data %>%
   ) %>%
   mutate(
     population = case_when(
-      age_group == "0-100"          ~ "ITN non-users",
-      age_group == "LLINusers_0-100" ~ "ITN users",
+      age_group == "0-100"          ~ "LLIN non-users",
+      age_group == "LLINusers_0-100" ~ "LLIN users",
       TRUE                           ~ NA_character_
     ),
     EIR_cat = case_when(
@@ -356,8 +356,8 @@ figure2_seed_data <- bind_rows(
     population = factor(
       population,
       levels = c(
-        "ITN users",
-        "ITN non-users",
+        "LLIN users",
+        "LLIN non-users",
         "Overall population"
       )
     ),
@@ -368,155 +368,29 @@ figure2_seed_data <- bind_rows(
   )
 
 
-# ============================================================
-# Figure 2: Relative prevalence reduction
-#
-# Mean relative prevalence reduction across the intervention
-# period (2023–2031) among ITN users and non-users.
-# ============================================================
-
-theme_pub <- function(base_size = 10) {
-  
-  theme_bw(
-    base_size = base_size,
-    base_family = "Arial"
-  ) +
-    theme(
-      # Overall text
-      text = element_text(
-        family = "Arial",
-        colour = "black"
-      ),
-      
-      # Legend
-      legend.position = "bottom",
-      legend.direction = "horizontal",
-      legend.title = element_blank(),
-      legend.text = element_text(
-        size = base_size - 1
-      ),
-      legend.key = element_blank(),
-      legend.key.height = unit(0.5, "lines"),
-      legend.spacing.x = unit(0.25, "cm"),
-      
-      # Facets
-      strip.text = element_text(
-        face = "bold",
-        size = base_size,
-        colour = "black"
-      ),
-      strip.background = element_rect(
-        fill = "white",
-        colour = NA
-      ),
-      
-      # Grid
-      panel.grid.major.x = element_blank(),
-      panel.grid.major.y = element_line(
-        colour = "grey85",
-        linewidth = 0.25
-      ),
-      panel.grid.minor = element_blank(),
-      panel.spacing = unit(0.8, "lines"),
-      
-      # Axes
-      axis.title = element_text(
-        face = "bold",
-        size = base_size,
-        colour = "black"
-      ),
-      axis.text = element_text(
-        colour = "black",
-        size = base_size - 1
-      ),
-      
-      # Panel border
-      panel.border = element_rect(
-        colour = "black",
-        linewidth = 0.5
-      ),
-      
-      # Axis ticks
-      axis.ticks = element_line(
-        linewidth = 0.4,
-        colour = "black"
-      ),
-      
-      # Do not put the manuscript figure title inside the plot
-      plot.title = element_blank(),
-      
-      # Useful for multi-panel labels such as A and B
-      plot.tag = element_text(
-        family = "Arial",
-        face = "bold",
-        size = base_size + 1,
-        colour = "black"
-      ),
-      
-      # Small outer border while avoiding excessive whitespace
-      plot.margin = margin(5, 5, 5, 5),
-      
-      # White background
-      plot.background = element_rect(
-        fill = "white",
-        colour = NA
-      )
-    )
-}
-
-
-cols_pop <- c(
-  "ITN users"     = "#432CA1",
-  "ITN non-users" = "#D55E00"
-)
-
-
 # ------------------------------------------------------------
-# Summarize prevalence reduction
-# ------------------------------------------------------------
-#
-# For each year, EIR category, ITN usage level and population
-# group, calculate the mean and IQR across simulation seeds and 
-# averaged across 2023–2031.
+# 8. Summarise prevalence across simulation seeds
 # ------------------------------------------------------------
 
-figure2_annual_reduction <- figure2_seed_data %>%
-  filter(
-    year >= 2023,
-    year <= 2031,
-    population %in% c(
-      "ITN non-users",
-      "ITN users"
-    )
-  ) %>%
-  mutate(
-    EIR_cat = factor(
-      EIR_cat,
-      levels = c("Low", "Moderate", "High"),
-      labels = c(
-        "Low PfPR (<10%)",
-        "Moderate PfPR (10–35%)",
-        "High PfPR (>35%)"
-      )
-    )
-  ) %>%
+figure2_summary <- figure2_seed_data %>%
   group_by(
+    year,
     EIR_cat,
     futNetcovstart2023,
     population
   ) %>%
   summarise(
-    mean_reduction = mean(
-      prev_reduction,
+    med = median(
+      prevalenceRate,
       na.rm = TRUE
     ),
-    q25_reduction = quantile(
-      prev_reduction,
+    q25 = quantile(
+      prevalenceRate,
       0.25,
       na.rm = TRUE
     ),
-    q75_reduction = quantile(
-      prev_reduction,
+    q75 = quantile(
+      prevalenceRate,
       0.75,
       na.rm = TRUE
     ),
@@ -525,140 +399,49 @@ figure2_annual_reduction <- figure2_seed_data %>%
 
 
 # ------------------------------------------------------------
-# Plot Figure 2
+# 9. Add 2022 prevalence as the counterfactual reference
 # ------------------------------------------------------------
 
-figure2_prevalence_reduction <- ggplot(
-  figure2_annual_reduction,
-  aes(
-    x = futNetcovstart2023,
-    y = mean_reduction,
-    group = population,
-    colour = population,
-    fill = population
-  )
-) +
-  
-  # Interquartile range across simulation seeds
-  geom_ribbon(
-    aes(
-      ymin = q25_reduction,
-      ymax = q75_reduction
-    ),
-    alpha = 0.18,
-    colour = NA,
-    show.legend = FALSE
-  ) +
-  
-  # Mean prevalence reduction
-  geom_line(
-    linewidth = 0.8
-  ) +
-  
-  geom_point(
-    size = 1.5
-  ) +
-  
-  # Transmission intensity panels
-  facet_wrap(
-    ~ EIR_cat,
-    nrow = 1
-  ) +
-  
-  scale_colour_manual(
-    values = cols_pop,
-    breaks = c(
-      "ITN non-users",
-      "ITN users"
-    ),
-    name = NULL
-  ) +
-  
-  scale_fill_manual(
-    values = cols_pop,
-    breaks = c(
-      "ITN non-users",
-      "ITN users"
-    ),
-    name = NULL
-  ) +
-  
-  scale_x_continuous(
-    breaks = seq(0, 0.8, by = 0.2),
-    labels = scales::label_percent(
-      accuracy = 1
-    ),
-    limits = c(0, 0.8),
-    expand = expansion(
-      mult = c(0.025, 0.04)
-    )
-  ) +
-  
-  scale_y_continuous(
-    breaks = seq(0, 100, by = 25),
-    limits = c(0, 102),
-    expand = expansion(
-      mult = c(0, 0.01)
-    )
-  ) +
-  
-  labs(
-    x = "ITN usage",
-    y = "Relative prevalence reduction (%)"
-  ) +
-  
-  theme_pub(
-    base_size = 10
-  ) +
-  
-  theme(
-    legend.position = "bottom",
-    legend.justification = "center",
-    axis.text.x = element_text(
-      size = 8.5,
-      hjust = 0.5
-    )
-  ) +
-  
-  guides(
-    colour = guide_legend(
-      nrow = 1,
-      byrow = TRUE,
-      override.aes = list(
-        linewidth = 0.8,
-        size = 1.5
-      )
-    )
+counterfactual_2022 <- figure2_summary %>%
+  filter(
+    futNetcovstart2023 == 0,
+    population == "Overall population",
+    year == 2022
+  ) %>%
+  select(
+    EIR_cat,
+    med
+  ) %>%
+  mutate(
+    population = "Counterfactual (2022 PfPR)"
   )
 
 
-# Display Figure 2
-figure2_prevalence_reduction
-
-#======================================
-#save figure
-#======================================
-
-ggsave(
-  filename = here::here("04_Figures", 
-                        "Figure2_prevalence_reduction.tiff"),
-  plot = figure2_prevalence_reduction,
-  device = ragg::agg_tiff,
-  width = 19.05,
-  height = 10.5,
-  units = "cm",
-  res = 600,
-  compression = "lzw",
-  background = "white"
-)
-#====================================
-#gap between users and non-users
-#====================================
-
-# gap btn user and non-user protection
-user_nonuser_gap <- figure2_annual_reduction|>
-  pivot_wider(id_cols = c(EIR_cat, futNetcovstart2023),
-              names_from = population, values_from = mean_reduction)|>
-  mutate(gap = `ITN users` - `ITN non-users`)
+counterfactual_reference <- expand.grid(
+  year = unique(figure2_summary$year),
+  futNetcovstart2023 = unique(
+    figure2_summary$futNetcovstart2023
+  ),
+  EIR_cat = unique(
+    figure2_summary$EIR_cat
+  )
+) %>%
+  left_join(
+    counterfactual_2022,
+    by = "EIR_cat"
+  )
 
 
+# ------------------------------------------------------------
+# 10. Prepare data for Figure 2
+# ------------------------------------------------------------
+
+figure2_plot_data <- bind_rows(
+  figure2_summary,
+  counterfactual_reference
+) %>%
+  filter(
+    futNetcovstart2023 == 0.5,
+    EIR_cat == "High",
+    population != "Overall population"
+  )

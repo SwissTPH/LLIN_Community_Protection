@@ -845,5 +845,6 @@ contrib <- figure3_population_impact_summary%>%
          q25_total_infections_averted, q75_total_infections_averted,
          percent_user_contribution, percent_nonuser_contribution,
          percent_counterfactual_averted)%>%
+  #filter(futNetcovstart2023 == 0.5)
   filter(futNetcovstart2023 %in% c(0.1, 0.8))
 
