@@ -8,4 +8,4 @@ The R scripts for analysis and producing all the manuscript figures can be locat
 All figures are saved in the 04_Figures folder
 
 Analysis are reproducible after cloning this repository. The R project contains all scripts. 
-The simulated data are loaded in the Figure2_prevalence_reduction.R script and once loaded in the R environment, figures 3 and 4 can be reproduced as well
+Simulated data are loaded in the Figure2_prevalence_reduction.R script and once loaded in the R environment, figures 3 and 4 can be reproduced as well.
