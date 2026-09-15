@@ -1,11 +1,11 @@
 #################################
-# Figure 2: Prevalence trends
+# Figure 00: Prevalence trends
 #
 # Created: September 2026
 #
 # Purpose:
 #   Generate the prevalence trend figure showing malaria
-#   parasite prevalence among LLIN users and non-users.
+#   parasite prevalence among ITN users and non-users at 50% ITN usage
 #
 # Data:
 #   OpenMalaria simulation outputs stored in:
@@ -147,8 +147,8 @@ prevalence_data <- openmalaria_data %>%
   ) %>%
   mutate(
     population = case_when(
-      age_group == "LLINusers_0-100" ~ "LLIN users",
-      age_group == "0-100"          ~ "LLIN non-users",
+      age_group == "LLINusers_0-100" ~ "ITN users",
+      age_group == "0-100"          ~ "ITN non-users",
       TRUE                          ~ NA_character_
     ),
     EIR_cat = case_when(
@@ -186,13 +186,13 @@ prevalence_data <- openmalaria_data %>%
 
 
 # ------------------------------------------------------------
-# 2. Calculate baseline prevalence for LLIN non-users
+# 2. Calculate baseline prevalence for ITN non-users
 # ------------------------------------------------------------
 
 baseline_prevalence <- prevalence_data %>%
   filter(
     futNetcovstart2023 == 0,
-    population == "LLIN non-users"
+    population == "ITN non-users"
   ) %>%
   group_by(
     year,
@@ -246,8 +246,8 @@ overall_prevalence_by_seed <- openmalaria_data %>%
   ) %>%
   mutate(
     population = case_when(
-      age_group == "0-100"          ~ "LLIN non-users",
-      age_group == "LLINusers_0-100" ~ "LLIN users",
+      age_group == "0-100"          ~ "ITN non-users",
+      age_group == "LLINusers_0-100" ~ "ITN users",
       TRUE                           ~ NA_character_
     ),
     EIR_cat = case_when(
@@ -327,7 +327,7 @@ overall_prevalence_by_seed <- overall_prevalence_by_seed %>%
 # 7. Combine population-specific and overall estimates
 # ------------------------------------------------------------
 
-figure2_seed_data <- bind_rows(
+figure00_seed_data <- bind_rows(
   prevalence_by_population %>%
     select(
       year,
@@ -356,8 +356,8 @@ figure2_seed_data <- bind_rows(
     population = factor(
       population,
       levels = c(
-        "LLIN users",
-        "LLIN non-users",
+        "ITN users",
+        "ITN non-users",
         "Overall population"
       )
     ),
@@ -372,7 +372,7 @@ figure2_seed_data <- bind_rows(
 # 8. Summarise prevalence across simulation seeds
 # ------------------------------------------------------------
 
-figure2_summary <- figure2_seed_data %>%
+figure00_summary <- figure00_seed_data %>%
   group_by(
     year,
     EIR_cat,
@@ -380,7 +380,7 @@ figure2_summary <- figure2_seed_data %>%
     population
   ) %>%
   summarise(
-    med = median(
+    mean_prevalence = mean(
       prevalenceRate,
       na.rm = TRUE
     ),
@@ -402,7 +402,7 @@ figure2_summary <- figure2_seed_data %>%
 # 9. Add 2022 prevalence as the counterfactual reference
 # ------------------------------------------------------------
 
-counterfactual_2022 <- figure2_summary %>%
+counterfactual_2022 <- figure00_summary %>%
   filter(
     futNetcovstart2023 == 0,
     population == "Overall population",
@@ -410,7 +410,7 @@ counterfactual_2022 <- figure2_summary %>%
   ) %>%
   select(
     EIR_cat,
-    med
+    mean_prevalence
   ) %>%
   mutate(
     population = "Counterfactual (2022 PfPR)"
@@ -418,12 +418,12 @@ counterfactual_2022 <- figure2_summary %>%
 
 
 counterfactual_reference <- expand.grid(
-  year = unique(figure2_summary$year),
+  year = unique(figure00_summary$year),
   futNetcovstart2023 = unique(
-    figure2_summary$futNetcovstart2023
+    figure00_summary$futNetcovstart2023
   ),
   EIR_cat = unique(
-    figure2_summary$EIR_cat
+    figure00_summary$EIR_cat
   )
 ) %>%
   left_join(
@@ -436,12 +436,201 @@ counterfactual_reference <- expand.grid(
 # 10. Prepare data for Figure 2
 # ------------------------------------------------------------
 
-figure2_plot_data <- bind_rows(
-  figure2_summary,
+figure00_plot_data <- bind_rows(
+  figure00_summary,
   counterfactual_reference
 ) %>%
   filter(
     futNetcovstart2023 == 0.5,
-    EIR_cat == "High",
+    #EIR_cat == "High",
     population != "Overall population"
   )
+
+# ------------------------------------------------------------
+# 10. Plot Figure00 as yearl prevalence trend at 50% ITN usage
+# ------------------------------------------------------------
+
+theme_pub <- function(base_size = 10) {
+  
+  theme_bw(
+    base_size = base_size,
+    base_family = "Arial"
+  ) +
+    theme(
+      # Overall text
+      text = element_text(
+        family = "Arial",
+        colour = "black"
+      ),
+      
+      # Legend
+      legend.position = "bottom",
+      legend.direction = "horizontal",
+      legend.title = element_blank(),
+      legend.text = element_text(
+        size = base_size - 1
+      ),
+      legend.key = element_blank(),
+      legend.key.height = unit(0.5, "lines"),
+      legend.spacing.x = unit(0.25, "cm"),
+      
+      # Facets
+      strip.text = element_text(
+        face = "bold",
+        size = base_size,
+        colour = "black"
+      ),
+      strip.background = element_rect(
+        fill = "white",
+        colour = NA
+      ),
+      
+      # Grid
+      panel.grid.major.x = element_blank(),
+      panel.grid.major.y = element_line(
+        colour = "grey85",
+        linewidth = 0.25
+      ),
+      panel.grid.minor = element_blank(),
+      panel.spacing = unit(0.8, "lines"),
+      
+      # Axes
+      axis.title = element_text(
+        face = "bold",
+        size = base_size,
+        colour = "black"
+      ),
+      axis.text = element_text(
+        colour = "black",
+        size = base_size - 1
+      ),
+      
+      # Panel border
+      panel.border = element_rect(
+        colour = "black",
+        linewidth = 0.5
+      ),
+      
+      # Axis ticks
+      axis.ticks = element_line(
+        linewidth = 0.4,
+        colour = "black"
+      ),
+      
+      # Do not put the manuscript figure title inside the plot
+      plot.title = element_blank(),
+      
+      # Useful for multi-panel labels such as A and B
+      plot.tag = element_text(
+        family = "Arial",
+        face = "bold",
+        size = base_size + 1,
+        colour = "black"
+      ),
+      
+      # Small outer border while avoiding excessive whitespace
+      plot.margin = margin(5, 5, 5, 5),
+      
+      # White background
+      plot.background = element_rect(
+        fill = "white",
+        colour = NA
+      )
+    )
+}
+
+
+cols_pop <- c(
+  "ITN users"     = "#432CA1",
+  "ITN non-users" = "#D55E00",
+  "Counterfactual (2022 PfPR)" = "grey"
+)
+
+figure00_prevalence_trend <- ggplot(
+  figure00_plot_data,
+  aes(
+    x = year,
+    y = mean_prevalence,
+    group = population,
+    colour = population,
+    fill = population
+  )
+) +
+  
+  # Interquartile range across simulation seeds
+  geom_ribbon(
+    aes(
+      ymin = q25,
+      ymax = q75
+    ),
+    alpha = 0.18,
+    colour = NA,
+    show.legend = FALSE
+  ) +
+  
+  # Mean prevalence reduction
+  geom_line(
+    linewidth = 0.8
+  ) +
+  
+  geom_point(
+    size = 1.5
+  ) +
+  
+  # Transmission intensity panels
+  facet_wrap(
+    ~ EIR_cat,
+    nrow = 1
+  ) +
+  
+  scale_colour_manual(
+    values = cols_pop,
+    breaks = c(
+      "ITN non-users",
+      "ITN users",
+      "Counterfactual (2022 PfPR)"
+    ),
+    name = NULL
+  ) +
+  
+  scale_fill_manual(
+    values = cols_pop,
+    breaks = c(
+      "ITN non-users",
+      "ITN users",
+      "Counterfactual (2022 PfPR)"
+    ),
+    name = NULL
+  ) +
+  
+  
+  labs(
+    x = "Year",
+    y = "All-age prevalence"
+  ) +
+  
+  theme_pub(
+    base_size = 10
+  ) +
+  
+  theme(
+    legend.position = "bottom",
+    legend.justification = "center",
+    axis.text.x = element_text(
+      size = 8.5,
+      hjust = 0.5
+    )
+  ) +
+  
+  guides(
+    colour = guide_legend(
+      nrow = 1,
+      byrow = TRUE,
+      override.aes = list(
+        linewidth = 0.8,
+        size = 1.5
+      )
+    )
+  )
+
+figure00_prevalence_trend
