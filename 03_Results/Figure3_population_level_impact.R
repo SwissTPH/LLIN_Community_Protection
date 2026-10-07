@@ -12,7 +12,7 @@
 #     C. Infections averted per ITN
 #
 # Starting data:
-#   figure2_seed_data in figure2_prevalence_reduction.R script
+#   prevalence_data loaded in figure2_prevalence_reduction.R script
 #################################
 
 library(tidyverse)
@@ -27,18 +27,240 @@ library(patchwork)
 # Population denominator for reporting
 population_denominator <- 1000
 
-# ITN colours
-population_impact_colours <- c(
-  "Remaining infections" = "white",
-  "Infections averted among ITN users" = "#432CA1",
-  "Infections averted among non-users" = "#D55E00"
-)
+# ------------------------------------------------------------
+# 1. Define population groups and EIR categories
+# ------------------------------------------------------------
 
-population_impact_order <- c(
-  "Infections averted among ITN users",
-  "Infections averted among non-users",
-  "Remaining infections"
-)
+prevalence_data <- openmalaria_data %>%
+  select(
+    year,
+    age_group,
+    seed,
+    EIR,
+    futNetcovstart2023,
+    prevalenceRate
+  ) %>%
+  mutate(
+    population = case_when(
+      age_group == "LLINusers_0-100" ~ "ITN users",
+      age_group == "0-100"          ~ "ITN non-users",
+      TRUE                          ~ NA_character_
+    ),
+    EIR_cat = case_when(
+      EIR <= 2             ~ "Low",
+      EIR > 2 & EIR <= 8   ~ "Moderate",
+      EIR > 8              ~ "High",
+      TRUE                 ~ NA_character_
+    ),
+    EIR_cat = factor(
+      EIR_cat,
+      levels = c("Low", "Moderate", "High")
+    )
+  ) %>%
+  filter(
+    year > 2021,
+    year < 2032,
+    !is.na(population),
+    !is.na(EIR_cat)
+  ) %>%
+  group_by(
+    year,
+    seed,
+    population,
+    EIR_cat,
+    futNetcovstart2023,
+    EIR
+  ) %>%
+  summarise(
+    prevalenceRate = mean(
+      prevalenceRate,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  )
+
+
+# ------------------------------------------------------------
+# 2. Calculate baseline prevalence for I non-users
+# ------------------------------------------------------------
+
+baseline_prevalence <- prevalence_data %>%
+  filter(
+    futNetcovstart2023 == 0,
+    population == "ITN non-users"
+  ) %>%
+  group_by(
+    year,
+    seed,
+    EIR_cat,
+    EIR
+  ) %>%
+  summarise(
+    baseline_prev = mean(
+      prevalenceRate,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  )
+
+
+# ------------------------------------------------------------
+# 3. Calculate prevalence reduction for users and non-users
+# ------------------------------------------------------------
+
+prevalence_by_population <- prevalence_data %>%
+  left_join(
+    baseline_prevalence,
+    by = c(
+      "year",
+      "seed",
+      "EIR_cat",
+      "EIR"
+    )
+  ) %>%
+  mutate(
+    prev_reduction =
+      100 * (baseline_prev - prevalenceRate) /
+      baseline_prev
+  )
+
+
+# ------------------------------------------------------------
+# 4. Calculate overall population prevalence
+# ------------------------------------------------------------
+
+overall_prevalence_by_seed <- openmalaria_data %>%
+  select(
+    year,
+    EIR,
+    age_group,
+    seed,
+    futNetcovstart2023,
+    nHost,
+    nPatent
+  ) %>%
+  mutate(
+    population = case_when(
+      age_group == "0-100"          ~ "ITN non-users",
+      age_group == "LLINusers_0-100" ~ "ITN users",
+      TRUE                           ~ NA_character_
+    ),
+    EIR_cat = case_when(
+      EIR <= 2             ~ "Low",
+      EIR > 2 & EIR <= 8   ~ "Moderate",
+      EIR > 8              ~ "High",
+      TRUE                 ~ NA_character_
+    ),
+    EIR_cat = factor(
+      EIR_cat,
+      levels = c("Low", "Moderate", "High")
+    )
+  ) %>%
+  filter(
+    year > 2021,
+    year < 2032,
+    !is.na(population),
+    !is.na(EIR_cat)
+  ) %>%
+  group_by(
+    year,
+    seed,
+    EIR_cat,
+    futNetcovstart2023,
+    EIR
+  ) %>%
+  summarise(
+    total_pop = sum(nHost, na.rm = TRUE),
+    total_patent = sum(nPatent, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    prevalenceRate = total_patent / total_pop
+  )
+
+
+# ------------------------------------------------------------
+# 5. Calculate baseline overall population prevalence
+# ------------------------------------------------------------
+
+overall_baseline_prevalence <- overall_prevalence_by_seed %>%
+  filter(
+    futNetcovstart2023 == 0
+  ) %>%
+  select(
+    year,
+    seed,
+    EIR,
+    EIR_cat,
+    baseline_prev = prevalenceRate
+  )
+
+
+# ------------------------------------------------------------
+# 6. Calculate overall population prevalence reduction
+# ------------------------------------------------------------
+
+overall_prevalence_by_seed <- overall_prevalence_by_seed %>%
+  left_join(
+    overall_baseline_prevalence,
+    by = c(
+      "year",
+      "seed",
+      "EIR",
+      "EIR_cat"
+    )
+  ) %>%
+  mutate(
+    prev_reduction =
+      100 * (baseline_prev - prevalenceRate) /
+      baseline_prev,
+    population = "Overall population"
+  )
+
+
+# ------------------------------------------------------------
+# 7. Combine population-specific and overall estimates
+# ------------------------------------------------------------
+
+figure2_seed_data <- bind_rows(
+  prevalence_by_population %>%
+    select(
+      year,
+      seed,
+      EIR,
+      EIR_cat,
+      futNetcovstart2023,
+      population,
+      prevalenceRate,
+      prev_reduction
+    ),
+  
+  overall_prevalence_by_seed %>%
+    select(
+      year,
+      seed,
+      EIR,
+      EIR_cat,
+      futNetcovstart2023,
+      population,
+      prevalenceRate,
+      prev_reduction
+    )
+) %>%
+  mutate(
+    population = factor(
+      population,
+      levels = c(
+        "ITN users",
+        "ITN non-users",
+        "Overall population"
+      )
+    ),
+    futNetcovstart2023 = round(
+      futNetcovstart2023,
+      3
+    )
+  )
 
 
 # ============================================================
@@ -56,6 +278,78 @@ figure2_seed_data <- figure2_seed_data %>%
         "High PfPR (>35%)"
       )
     )
+  )
+
+# ============================================================
+# 2. OVERALL PREVALENCE
+# ============================================================
+
+figure3_overall_prevalence <- figure2_seed_data %>%
+  filter(
+    year >= 2023,
+    year <= 2031,
+    population == "Overall population"
+  ) %>%
+  group_by(
+    seed,
+    EIR,
+    EIR_cat,
+    futNetcovstart2023
+  ) %>%
+  summarise(
+    overall_prevalence = mean(
+      prevalenceRate,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  )
+
+# ============================================================
+# 3. BASELINE OVERALL PREVALENCE
+# ============================================================
+
+figure3_baseline_overall <- figure3_overall_prevalence %>%
+  filter(
+    futNetcovstart2023 == 0
+  ) %>%
+  select(
+    seed,
+    EIR,
+    EIR_cat,
+    baseline_overall_prevalence = overall_prevalence
+  )
+
+# ============================================================
+# 4. TOTAL INFECTIONS AVERTED PER 1000 POPULATION
+# ============================================================
+
+figure3_overall_impact <- figure3_overall_prevalence %>%
+  left_join(
+    figure3_baseline_overall,
+    by = c(
+      "seed",
+      "EIR",
+      "EIR_cat"
+    )
+  ) %>%
+  mutate(
+    
+    # total infections averted per 1,000 population
+    infections_averted_per_1000 =
+      (
+        baseline_overall_prevalence -
+          overall_prevalence
+      ) * population_denominator,
+    
+    # baseline infections
+    infections_at_baseline_per_1000 =
+      baseline_overall_prevalence * 
+         population_denominator,
+    
+    # remaining infections
+    remaining_infections =
+      infections_at_baseline_per_1000 -
+      infections_averted_per_1000
   )
 
 
@@ -221,24 +515,24 @@ figure3_population_impact <- figure3_nonuser_impact %>%
       "EIR_cat",
       "futNetcovstart2023"
     )
-  ) %>%
-  mutate(
-    
-    # Total infections averted per 1,000 population
-    total_infections_averted =
-      infections_averted_users +
-      infections_averted_nonusers,
-    
-    # Baseline infections per 1,000 population
-    baseline_infections_per_1000 =
-      baseline_nonuser_prevalence *
-      population_denominator,
-    
-    # Remaining infections per 1,000 population
-    remaining_infections =
-      baseline_infections_per_1000 -
-      total_infections_averted
-    
+  )%>%
+      left_join(
+        figure3_overall_impact %>%
+        select(
+          seed,
+          EIR,
+          EIR_cat,
+          futNetcovstart2023,
+          infections_averted_per_1000,
+          infections_at_baseline_per_1000,
+          remaining_infections
+        ),
+      by = c(
+        "seed",
+        "EIR",
+        "EIR_cat",
+        "futNetcovstart2023"
+      )
   )
 
 
@@ -257,22 +551,22 @@ figure3_population_impact_summary <- figure3_population_impact %>%
     # Total population impact
     # --------------------------------------------------------
     
-    mean_total_infections_averted =
+    mean_infections_averted_per_1000 =
       mean(
-        total_infections_averted,
+        infections_averted_per_1000,
         na.rm = TRUE
       ),
     
-    q25_total_infections_averted =
+    q25_infections_averted_per_1000 =
       quantile(
-        total_infections_averted,
+        infections_averted_per_1000,
         0.25,
         na.rm = TRUE
       ),
     
-    q75_total_infections_averted =
+    q75_infections_averted_per_1000 =
       quantile(
-        total_infections_averted,
+        infections_averted_per_1000,
         0.75,
         na.rm = TRUE
       ),
@@ -326,16 +620,31 @@ figure3_population_impact_summary <- figure3_population_impact %>%
       ),
     
     # --------------------------------------------------------
-    # user and non-user percentage contribution 
+    # baseline infections
     # --------------------------------------------------------
     
-    percent_user_contribution = (mean_infections_averted_users/
-      mean_total_infections_averted)*100,
+    mean_infections_at_baseline_per_1000 =
+      mean(
+        infections_at_baseline_per_1000,
+        na.rm = TRUE
+      ),
     
-    percent_nonuser_contribution = (mean_infections_averted_nonusers/
-                                   mean_total_infections_averted)*100,
+    q25_infections_at_baseline_per_1000 =
+      quantile(
+        infections_at_baseline_per_1000,
+        0.25,
+        na.rm = TRUE
+      ),
     
-    # --------------------------------------------------------
+    q75_infections_at_baseline_per_1000 =
+      quantile(
+        infections_at_baseline_per_1000,
+        0.75,
+        na.rm = TRUE
+      ),
+  
+    
+     # --------------------------------------------------------
     # Remaining infections
     # --------------------------------------------------------
     
@@ -359,12 +668,19 @@ figure3_population_impact_summary <- figure3_population_impact %>%
         na.rm = TRUE
       ),
     
-    counterfactual_infections = (mean_infections_averted_nonusers +
-                                        mean_infections_averted_users +
-                                        mean_remaining_infections),
+    # --------------------------------------------------------
+    # user and non-user percentage contribution
+    # and percentage of baseline infections averted
+    # --------------------------------------------------------
     
-    percent_counterfactual_averted = (mean_total_infections_averted /
-                                        counterfactual_infections)*100,
+    percent_user_contribution = (mean_infections_averted_users/
+                                   mean_infections_averted_per_1000)*100,
+    
+    percent_nonuser_contribution = (mean_infections_averted_nonusers/
+                                      mean_infections_averted_per_1000)*100,
+    
+    percent_baseline_averted = (mean_infections_averted_per_1000/
+                                        mean_infections_at_baseline_per_1000)*100,
     
     .groups = "drop"
   )
@@ -373,8 +689,7 @@ figure3_population_impact_summary <- figure3_population_impact %>%
 # ============================================================
 # FIGURE 3A
 # Population-level infections:
-# infections averted among users +
-# infections averted among non-users +
+# infections averted  +
 # remaining infections
 # ============================================================
 
@@ -382,8 +697,7 @@ figure3A_data <- figure3_population_impact_summary %>%
   select(
     EIR_cat,
     futNetcovstart2023,
-    mean_infections_averted_users,
-    mean_infections_averted_nonusers,
+    mean_infections_averted_per_1000,
     mean_remaining_infections
   ) %>%
   filter(
@@ -391,8 +705,7 @@ figure3A_data <- figure3_population_impact_summary %>%
   ) %>%
   pivot_longer(
     cols = c(
-      mean_infections_averted_users,
-      mean_infections_averted_nonusers,
+      mean_infections_averted_per_1000,
       mean_remaining_infections
     ),
     names_to = "impact_component",
@@ -403,24 +716,36 @@ figure3A_data <- figure3_population_impact_summary %>%
     impact_component = case_when(
       
       impact_component ==
-        "mean_infections_averted_users" ~
-        "Infections averted among ITN users",
+        "mean_infections_averted_per_1000" ~
+        "Infections averted per 1,000 population",
       
-      impact_component ==
-        "mean_infections_averted_nonusers" ~
-        "Infections averted among non-users",
       
       impact_component ==
         "mean_remaining_infections" ~
         "Remaining infections"
       
-    ),
+     )
     
-    impact_component = factor(
-      impact_component,
-      levels = population_impact_order
+  )
+
+
+
+
+
+figure3A_data <- figure3A_data %>%
+  mutate(
+    fill_colour = case_when(
+      impact_component == "Remaining infections" ~ "white",
+      
+      impact_component == "Infections averted per 1,000 population" &
+        EIR_cat == "Low PfPR (<10%)" ~ "#2A6EBB",
+      
+      impact_component == "Infections averted per 1,000 population" &
+        EIR_cat == "Moderate PfPR (10–35%)" ~ "#F0AB00",
+      
+      impact_component == "Infections averted per 1,000 population" &
+        EIR_cat == "High PfPR (>35%)" ~ "#C50084"
     )
-    
   )
 
 
@@ -429,7 +754,7 @@ figure3A <- ggplot(
   aes(
     x = futNetcovstart2023,
     y = infections,
-    fill = impact_component,
+    fill = fill_colour,
     group = impact_component
   )
 ) +
@@ -446,9 +771,21 @@ figure3A <- ggplot(
     nrow = 1
   ) +
   
-  scale_fill_manual(
-    values = population_impact_colours,
-    breaks = population_impact_order
+  scale_fill_identity(
+    guide = "legend",
+    breaks = c(
+      "#2A6EBB",
+      "#F0AB00",
+      "#C50084",
+      "white"
+    ),
+    labels = c(
+      " ",
+      " ",
+      "Infections averted",
+      "Remaining infections"
+      
+    )
   ) +
   
   scale_x_continuous(
@@ -459,7 +796,7 @@ figure3A <- ggplot(
   ) +
   
   labs(
-    x = "ITN usage",
+    x = "ITN coverage",
     y = "Infections per 1,000 population",
     fill = NULL
   ) +
@@ -470,14 +807,13 @@ figure3A <- ggplot(
     legend.position = "bottom"
   )
 
-
 figure3A
 
 
 # ============================================================
 # FIGURE 3B
 # Incremental infections averted per
-# 10-percentage-point increase in ITN usage
+# 10-percentage-point increase in ITN coverage
 # ============================================================
 
 figure3_incremental_impact <- figure3_population_impact %>%
@@ -497,8 +833,8 @@ figure3_incremental_impact <- figure3_population_impact %>%
       lag(futNetcovstart2023),
     
     infections_averted_difference =
-      total_infections_averted -
-      lag(total_infections_averted),
+      infections_averted_per_1000 -
+      lag(infections_averted_per_1000),
     
     # Convert the observed change between coverage
     # levels to the equivalent impact of a
@@ -512,9 +848,14 @@ figure3_incremental_impact <- figure3_population_impact %>%
   ) %>%
   ungroup() %>%
   
+  mutate(
+    transition = paste0(lag(futNetcovstart2023)*100, "% → ", futNetcovstart2023*100, "%")
+  )%>%
+  
   group_by(
     EIR_cat,
-    futNetcovstart2023
+    futNetcovstart2023,
+    transition
   ) %>%
   summarise(
     
@@ -539,16 +880,17 @@ figure3_incremental_impact <- figure3_population_impact %>%
       ),
     
     .groups = "drop"
+    
   )
 
 
 figure3B <- ggplot(
   figure3_incremental_impact %>%
     filter(
-      futNetcovstart2023 > 0.1
+      futNetcovstart2023 > 0
     ),
   aes(
-    x = futNetcovstart2023,
+    x = transition,
     y = inc_benefit_mean,
     colour = EIR_cat,
     fill = EIR_cat,
@@ -584,19 +926,17 @@ figure3B <- ggplot(
     alpha = 0.7
   ) +
   
-  scale_x_continuous(
-    breaks = seq(0, 0.8, by = 0.2),
-    labels = scales::percent_format(
-      accuracy = 1
-    )
-  ) +
+  # scale_x_continuous(
+  #   breaks = seq(0, 0.8, by = 0.1),
+  #   labels = scales::percent_format(accuracy = 1)
+  # ) +
   
   labs(
-    x = "ITN usage reached",
+    x = "ITN coverage",
     y = expression(
       atop(
         "Incremental infections averted per",
-        "10-percentage-point increase in usage"
+        "1,000 population per 10pp increase in coverage"
       )
     ),
     colour = NULL,
@@ -610,7 +950,9 @@ figure3B <- ggplot(
     legend.justification = "center",
     axis.text.x = element_text(
       size = 8.5,
-      hjust = 0.5
+      hjust = 1,
+      vjust = 1,
+      angle = 45
     )
   ) +
   
@@ -643,7 +985,7 @@ figure3_per_net <- figure3_population_impact %>%
       (1000 * futNetcovstart2023) / 1.8,
     
     infections_averted_per_itn =
-      total_infections_averted /
+      infections_averted_per_1000 /
       nets_per_1000
     
   ) %>%
@@ -727,8 +1069,13 @@ figure3C <- ggplot(
   ) +
   
   labs(
-    x = "ITN usage",
-    y = "Infections averted per ITN",
+    x = "ITN coverage",
+    y = expression(
+      atop(
+        "Infections averted per ITN",
+        "distributed per 1,000 population"
+      )
+    ), 
     colour = NULL,
     fill = NULL
   ) +
@@ -827,11 +1174,11 @@ figure3
 ggsave(
   filename = here::here(
     "04_Figures",
-    "Figure_3_population_impact.tiff"
+    "Fig3.tiff"
   ),
   plot = figure3,
-  width = 18,
-  height = 17,
+  width = 22,
+  height = 19,
   units = "cm",
   dpi = 600,
   compression = "lzw"
@@ -841,10 +1188,10 @@ ggsave(
 # filter for reporting and supplementary
 #=======================================
 contrib <- figure3_population_impact_summary%>%
-  select(EIR_cat, futNetcovstart2023, mean_total_infections_averted,
-         q25_total_infections_averted, q75_total_infections_averted,
+  select(EIR_cat, futNetcovstart2023, mean_infections_averted_per_1000,
+         q25_infections_averted_per_1000, q75_infections_averted_per_1000,
          percent_user_contribution, percent_nonuser_contribution,
-         percent_counterfactual_averted)%>%
+         percent_baseline_averted)%>%
   #filter(futNetcovstart2023 == 0.5)
   filter(futNetcovstart2023 %in% c(0.1, 0.8))
 
