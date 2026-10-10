@@ -1271,9 +1271,9 @@ ggsave(
   ),
   plot = figure2,
   device = ragg::agg_tiff,
-  width = 22,
-  height = 19,
-  units = "cm",
+  width = 9.5,
+  height = 7.2,
+  units = "in",
   res = 600,
   compression = "lzw",
   background = "white"

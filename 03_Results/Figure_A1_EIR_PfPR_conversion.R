@@ -1,5 +1,5 @@
 #################################
-# Supplementary Figure S3:
+# Supplementary Figure A:
 # EIR–PfPR conversion
 #
 # Created: September 2026
@@ -10,7 +10,7 @@
 #   under the 2022 pre-intervention scenario without LLIN use.
 #
 #   This figure provides the EIR thresholds corresponding
-#   to the PfPR categories used throughout the analysis.
+#   to the WHO PfPR categories used throughout the analysis.
 #
 # Data:
 #   OpenMalaria simulation outputs stored in:
@@ -260,7 +260,7 @@ theme_pub <- function(base_size = 10) {
 }
 
 
-figureA1 <- ggplot(
+figureA <- ggplot(
   figureA1_conversion_data,
   aes(
     x = EIR,
@@ -309,7 +309,7 @@ figureA1 <- ggplot(
   theme_pub()
 
 
-figureA1
+figureA
 
 # ============================================================
 # 7. ADD PfPR CATEGORY THRESHOLDS
@@ -330,7 +330,7 @@ figureA1
 # additional visual reference.
 # ============================================================
 
-figureA1 <- figureA1 +
+figureA <- figureA +
   
   geom_hline(
     yintercept = c(
@@ -388,7 +388,7 @@ figureA1 <- figureA1 +
 # 8. DISPLAY FIGURE
 # ============================================================
 
-figureA1
+figureA
 
 
 # ============================================================
@@ -398,7 +398,7 @@ figureA1
 ggsave(
   filename = here::here(
     "04_Figures",
-    "Figure_A1_EIR_PfPR_conversion.tiff"
+    "Fig_A.tiff"
   ),
   plot = figureA1,
   device = ragg::agg_tiff,
